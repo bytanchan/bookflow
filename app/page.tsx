@@ -14,7 +14,7 @@ type BookVibe = {
   playlistTitle: string;
   readingVibe: string;
   moodTags: string[];
-  spotifySearchQueries: string[];
+  youtubeSearchQueries: string[];
 };
 
 type YouTubeVideo = {
@@ -25,40 +25,74 @@ type YouTubeVideo = {
   thumbnail: string;
   youtubeUrl: string;
   embedUrl: string;
+  categoryLabel:
+    | "Functional Focus"
+    | "Cinematic Score"
+    | "Vibe Playlist"
+    | "Ambient World"
+    | "Unexpected Pick";
 };
+
+const GENERATION_STEPS = [
+  { key: "findingBook", label: "Finding your book..." },
+  { key: "generatingVibe", label: "Generating your reading vibe..." },
+  { key: "curatingSoundtrack", label: "Curating your soundtrack..." },
+] as const;
+
+type GenerationStage = "idle" | (typeof GENERATION_STEPS)[number]["key"];
+type LoadingStepStatus = "pending" | "loading" | "done";
 
 export default function Home() {
   const [prompt, setPrompt] = useState("");
-  const [statusText, setStatusText] = useState("Your answer will land here.");
+  const [statusText, setStatusText] = useState("");
   const [bookResult, setBookResult] = useState<Book | null>(null);
   const [vibeResult, setVibeResult] = useState<BookVibe | null>(null);
-  const [isGeneratingVibe, setIsGeneratingVibe] = useState(false);
+  const [generationStage, setGenerationStage] =
+    useState<GenerationStage>("idle");
   const [vibeError, setVibeError] = useState("");
   const [youtubeVideos, setYoutubeVideos] = useState<YouTubeVideo[]>([]);
-  const [isLoadingYoutube, setIsLoadingYoutube] = useState(false);
   const [youtubeError, setYoutubeError] = useState("");
+  const isGenerating = generationStage !== "idle";
+  const activeStepIndex = GENERATION_STEPS.findIndex(
+    (step) => step.key === generationStage
+  );
+
+  const getLoadingStepStatus = (stepIndex: number): LoadingStepStatus => {
+    if (!isGenerating || activeStepIndex === -1) {
+      return "pending";
+    }
+
+    if (stepIndex < activeStepIndex) {
+      return "done";
+    }
+
+    if (stepIndex === activeStepIndex) {
+      return "loading";
+    }
+
+    return "pending";
+  };
 
   const handleGenerate = async () => {
     const bookTitle = prompt.trim();
 
     if (!bookTitle) {
+      setGenerationStage("idle");
       setBookResult(null);
       setVibeResult(null);
       setVibeError("");
       setYoutubeVideos([]);
       setYoutubeError("");
-      setStatusText("No book found. Try another title.");
+      setStatusText("We couldn’t find that book—try another title.");
       return;
     }
-
-    setStatusText("Searching books...");
+    setGenerationStage("findingBook");
+    setStatusText("");
     setBookResult(null);
     setVibeResult(null);
     setVibeError("");
     setYoutubeVideos([]);
     setYoutubeError("");
-    setIsGeneratingVibe(false);
-    setIsLoadingYoutube(false);
 
     try {
       const response = await fetch(
@@ -73,7 +107,7 @@ export default function Home() {
       const firstResult = data?.docs?.[0];
 
       if (!firstResult) {
-        setStatusText("No book found. Try another title.");
+        setStatusText("We couldn’t find that book—try another title.");
         return;
       }
 
@@ -88,10 +122,7 @@ export default function Home() {
       };
 
       setBookResult(selectedBook);
-      setStatusText("");
-
-      // After we have a book, ask our server route to generate the reading vibe.
-      setIsGeneratingVibe(true);
+      setGenerationStage("generatingVibe");
       try {
         const vibeResponse = await fetch("/api/generate-vibe", {
           method: "POST",
@@ -111,7 +142,9 @@ export default function Home() {
         }
 
         const vibeData = await vibeResponse.json();
-        const rawQueries = Array.isArray(vibeData.spotifySearchQueries)
+        const rawQueries = Array.isArray(vibeData.youtubeSearchQueries)
+          ? vibeData.youtubeSearchQueries
+          : Array.isArray(vibeData.spotifySearchQueries)
           ? vibeData.spotifySearchQueries
           : [];
         let musicQueries = rawQueries
@@ -123,7 +156,12 @@ export default function Home() {
           musicQueries = [
             `${selectedBook.title} instrumental reading soundtrack`,
             `${selectedBook.title} ambient study music`,
-            `${selectedBook.authorName} instrumental`,
+            `${selectedBook.title} cinematic score focus mix`,
+            `${selectedBook.authorName} no vocals reading music`,
+            `music for when you are reading ${selectedBook.title}`,
+            `reading in a quiet library while rain falls ${selectedBook.title}`,
+            `${selectedBook.title} character energy forces you to lock in`,
+            `${selectedBook.title} world ambience playlist`,
           ];
         }
 
@@ -131,10 +169,9 @@ export default function Home() {
           playlistTitle: vibeData.playlistTitle ?? "Untitled Reading Mix",
           readingVibe: vibeData.readingVibe ?? "A focused reading vibe.",
           moodTags: Array.isArray(vibeData.moodTags) ? vibeData.moodTags : [],
-          spotifySearchQueries: musicQueries,
+          youtubeSearchQueries: musicQueries,
         });
-
-        setIsLoadingYoutube(true);
+        setGenerationStage("curatingSoundtrack");
         setYoutubeError("");
         setYoutubeVideos([]);
         try {
@@ -174,13 +211,9 @@ export default function Home() {
           }
         } catch {
           setYoutubeError("Something went wrong. Try again.");
-        } finally {
-          setIsLoadingYoutube(false);
         }
       } catch {
         setVibeError("Something went wrong. Try again.");
-      } finally {
-        setIsGeneratingVibe(false);
       }
     } catch {
       setBookResult(null);
@@ -189,29 +222,27 @@ export default function Home() {
       setYoutubeVideos([]);
       setYoutubeError("");
       setStatusText("Something went wrong. Try again.");
+    } finally {
+      setGenerationStage("idle");
     }
   };
 
   return (
     <div className="min-h-screen bg-[#f4f3ef] px-6 py-10 text-zinc-900 md:px-10">
       <main className="mx-auto w-full max-w-6xl">
-        <p className="mb-5 inline-flex rounded-full border border-zinc-900 bg-yellow-300 px-3 py-1 text-xs font-semibold uppercase tracking-wide">
-          Live Lesson
+        <p className="mb-3 inline-flex rounded-full border border-zinc-900 bg-yellow-300 px-3 py-1 text-xs font-semibold uppercase tracking-wide">
+          BookFlow
         </p>
-        <h1 className="text-5xl font-semibold leading-tight tracking-tight md:text-7xl">
-          How does an <span className="font-serif italic font-normal">API</span>{" "}
-          actually work?
-        </h1>
-        <p className="mt-4 mb-8 text-lg text-zinc-700">
-          Type something on the left. The API answers on the right. That&apos;s
-          the whole job.
+        <p className="mb-8 max-w-2xl text-lg text-zinc-700">
+          Instrumental soundtracks tuned to the book in your hands—quiet enough
+          to read, bold enough to feel.
         </p>
 
         <section className="grid gap-4 md:grid-cols-2">
           <div className="rounded-2xl border-2 border-zinc-900 bg-[#f8f8f8] p-4 shadow-[3px_3px_0_0_#111]">
             <div className="mb-4 flex items-center justify-between">
               <p className="text-sm font-semibold uppercase tracking-wide">
-                Your Prompt
+                Start here
               </p>
               <div className="flex gap-1.5">
                 <span className="h-2 w-2 rounded-full bg-red-400" />
@@ -219,12 +250,19 @@ export default function Home() {
                 <span className="h-2 w-2 rounded-full bg-green-400" />
               </div>
             </div>
+            <h2 className="text-2xl font-semibold leading-snug text-zinc-900 md:text-3xl">
+              Turn any book into a reading soundtrack
+            </h2>
+            <p className="mt-2 text-sm text-zinc-600 md:text-base">
+              Enter a book and get a focus-friendly, instrumental soundtrack
+              tailored to its mood.
+            </p>
             <textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               maxLength={500}
-              placeholder="Type a book title..."
-              className="h-56 w-full resize-none border-0 bg-transparent text-4xl font-serif italic text-zinc-900 outline-none placeholder:text-zinc-500"
+              placeholder="Search for a book (e.g. The Secret History)"
+              className="mt-4 h-40 w-full resize-none border-0 bg-transparent text-2xl font-serif italic text-zinc-900 outline-none placeholder:text-zinc-500 md:h-48 md:text-3xl"
             />
             <div className="mt-4 flex items-center justify-between border-t border-dashed border-zinc-300 pt-4">
               <span className="text-xs text-zinc-500">
@@ -232,18 +270,76 @@ export default function Home() {
               </span>
               <button
                 onClick={handleGenerate}
-                className="rounded-full border border-zinc-900 bg-yellow-400 px-5 py-2 text-sm font-semibold shadow-[2px_2px_0_0_#111] transition hover:translate-y-[1px] hover:shadow-[1px_1px_0_0_#111]"
+                disabled={isGenerating}
+                className="rounded-full border border-zinc-900 bg-yellow-400 px-5 py-2 text-sm font-semibold shadow-[2px_2px_0_0_#111] transition hover:translate-y-[1px] hover:shadow-[1px_1px_0_0_#111] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:shadow-[2px_2px_0_0_#111]"
               >
-                Send
+                Generate soundtrack
               </button>
             </div>
           </div>
 
           <div className="rounded-2xl border-2 border-zinc-900 bg-zinc-950 p-4 text-zinc-100 shadow-[3px_3px_0_0_#f1cc32]">
             <p className="mb-4 text-sm font-semibold uppercase tracking-wide text-zinc-200">
-              The Answer
+              Your soundtrack
             </p>
-            {bookResult ? (
+            {isGenerating ? (
+              <div className="flex min-h-56 flex-col justify-center">
+                <p className="mb-4 text-sm font-medium uppercase tracking-wide text-zinc-400">
+                  We&apos;re building your soundtrack
+                </p>
+                <ul className="space-y-2.5">
+                  {GENERATION_STEPS.map((step, index) => {
+                    const stepStatus = getLoadingStepStatus(index);
+
+                    return (
+                      <li
+                        key={step.key}
+                        className="flex items-center justify-between rounded-md border border-zinc-800 bg-zinc-900/70 px-3 py-2.5"
+                      >
+                        <div className="flex items-center gap-3">
+                          <span
+                            className={`inline-flex h-5 w-5 items-center justify-center rounded-full border text-xs ${
+                              stepStatus === "done"
+                                ? "border-green-300/60 bg-green-300/15 text-green-200"
+                                : stepStatus === "loading"
+                                ? "border-yellow-200/50 bg-yellow-200/10"
+                                : "border-zinc-700 bg-zinc-900"
+                            }`}
+                          >
+                            {stepStatus === "done" ? (
+                              "✓"
+                            ) : stepStatus === "loading" ? (
+                              <span className="h-2 w-2 animate-pulse rounded-full bg-yellow-300" />
+                            ) : (
+                              <span className="h-2 w-2 rounded-full bg-zinc-600" />
+                            )}
+                          </span>
+                          <span
+                            className={`text-sm ${
+                              stepStatus === "pending"
+                                ? "text-zinc-500"
+                                : "text-zinc-200"
+                            }`}
+                          >
+                            {step.label}
+                          </span>
+                        </div>
+                        {stepStatus === "loading" ? (
+                          <span className="inline-flex items-center gap-1.5 text-xs text-yellow-200">
+                            <span className="h-3 w-3 animate-spin rounded-full border border-yellow-200/30 border-t-yellow-200" />
+                            Loading
+                          </span>
+                        ) : stepStatus === "done" ? (
+                          <span className="text-xs text-green-200">Done</span>
+                        ) : (
+                          <span className="text-xs text-zinc-500">Queued</span>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ) : bookResult ? (
               <div className="space-y-3 text-zinc-200">
                 {bookResult.coverId ? (
                   <img
@@ -252,85 +348,65 @@ export default function Home() {
                     className="h-44 w-32 rounded-md border border-zinc-700 object-cover"
                   />
                 ) : null}
-                <h2 className="text-2xl font-semibold text-white">{bookResult.title}</h2>
-                <p>Author: {bookResult.authorName}</p>
-                <p>
-                  First published:{" "}
-                  {bookResult.firstPublishedYear ?? "Not available"}
-                </p>
+                <div>
+                  <h2 className="text-2xl font-semibold text-white">
+                    {bookResult.title}
+                  </h2>
+                  <p className="text-zinc-300">{bookResult.authorName}</p>
+                  <p className="mt-1 text-sm text-zinc-500">
+                    First published{" "}
+                    {bookResult.firstPublishedYear ?? "—"}
+                  </p>
+                </div>
 
                 <div className="mt-4 rounded-md border border-zinc-700 bg-zinc-900 p-3">
                   <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">
-                    OpenAI reading vibe
+                    From the book’s mood
                   </p>
-
-                  {isGeneratingVibe ? (
-                    <p className="text-sm text-zinc-300">Generating vibe...</p>
-                  ) : null}
-
-                  {!isGeneratingVibe && vibeError ? (
+                  {vibeError ? (
                     <p className="text-sm text-red-300">{vibeError}</p>
-                  ) : null}
-
-                  {!isGeneratingVibe && !vibeError && vibeResult ? (
-                    <div className="space-y-2 text-sm">
-                      <p>
-                        <span className="font-semibold text-white">
-                          Playlist:
-                        </span>{" "}
-                        {vibeResult.playlistTitle}
-                      </p>
-                      <p>
-                        <span className="font-semibold text-white">Vibe:</span>{" "}
-                        {vibeResult.readingVibe}
-                      </p>
-                      <p>
-                        <span className="font-semibold text-white">
-                          Mood tags:
-                        </span>{" "}
-                        {vibeResult.moodTags.join(", ")}
-                      </p>
+                  ) : vibeResult ? (
+                    <div className="space-y-3 text-sm">
                       <div>
-                        <p className="font-semibold text-white">
-                          Music search queries:
+                        <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                          Playlist title
                         </p>
-                        <ul className="list-disc pl-5">
-                          {vibeResult.spotifySearchQueries.map((query) => (
-                            <li key={query}>{query}</li>
-                          ))}
-                        </ul>
+                        <p className="text-base font-medium text-white">
+                          {vibeResult.playlistTitle}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                          Reading vibe
+                        </p>
+                        <p className="text-zinc-300">{vibeResult.readingVibe}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                          Mood tags
+                        </p>
+                        <p className="text-zinc-300">
+                          {vibeResult.moodTags.join(" · ")}
+                        </p>
                       </div>
 
                       <div className="mt-4 border-t border-zinc-700 pt-3">
                         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">
-                          YouTube soundtrack preview
+                          Tracks
                         </p>
-
-                        {isLoadingYoutube ? (
-                          <p className="text-sm text-zinc-300">
-                            Searching YouTube...
-                          </p>
-                        ) : null}
-
-                        {!isLoadingYoutube && youtubeError ? (
+                        {youtubeError ? (
                           <p className="text-sm text-red-300">{youtubeError}</p>
-                        ) : null}
-
-                        {!isLoadingYoutube &&
-                        !youtubeError &&
-                        youtubeVideos.length > 0 ? (
+                        ) : youtubeVideos.length > 0 ? (
                           <ul className="space-y-4">
                             {youtubeVideos.map((video, index) => (
                               <li
                                 key={`${video.searchQuery}-${index}`}
                                 className="rounded-md border border-zinc-700 bg-zinc-950 p-3"
                               >
-                                <p className="mb-2 text-xs text-zinc-500">
-                                  Query: {video.searchQuery}
-                                </p>
                                 {!video.videoId ? (
                                   <p className="text-sm text-zinc-400">
-                                    No video found for this search.
+                                    No track turned up for this pick—skip ahead
+                                    or try another book.
                                   </p>
                                 ) : (
                                   <>
@@ -343,20 +419,33 @@ export default function Home() {
                                         />
                                       ) : null}
                                       <div className="min-w-0 flex-1">
+                                        <p className="mb-1 inline-flex rounded-full border border-zinc-600 px-2 py-0.5 text-xs font-semibold text-zinc-300">
+                                          {video.categoryLabel}
+                                        </p>
                                         <p className="font-semibold text-white">
                                           {video.title}
                                         </p>
                                         <p className="text-sm text-zinc-400">
                                           {video.channelTitle}
                                         </p>
-                                        <a
-                                          href={video.youtubeUrl}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          className="mt-2 inline-block text-sm text-yellow-300 underline"
-                                        >
-                                          Open on YouTube
-                                        </a>
+                                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                                          <a
+                                            href={video.youtubeUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex rounded-full border border-zinc-600 bg-yellow-400 px-4 py-1.5 text-sm font-semibold text-zinc-900 shadow-sm transition hover:bg-yellow-300"
+                                          >
+                                            Play
+                                          </a>
+                                          <a
+                                            href={video.youtubeUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-sm text-yellow-300 underline decoration-yellow-300/50 underline-offset-2 hover:decoration-yellow-300"
+                                          >
+                                            Open on YouTube
+                                          </a>
+                                        </div>
                                       </div>
                                     </div>
                                     <div className="mt-3 overflow-hidden rounded-md">
@@ -373,19 +462,38 @@ export default function Home() {
                               </li>
                             ))}
                           </ul>
-                        ) : null}
+                        ) : (
+                          <p className="text-sm text-zinc-400">
+                            We couldn&apos;t find tracks this round—try
+                            generating again.
+                          </p>
+                        )}
                       </div>
                     </div>
-                  ) : null}
+                  ) : (
+                    <p className="text-sm text-zinc-400">
+                      Generate a soundtrack to see your vibe.
+                    </p>
+                  )}
                 </div>
               </div>
+            ) : statusText ? (
+              <div className="flex min-h-56 flex-col justify-center">
+                <p className="text-lg text-zinc-300">{statusText}</p>
+              </div>
             ) : (
-              <div className="h-56 whitespace-pre-wrap font-serif text-5xl italic text-zinc-400">
-                {statusText}
+              <div className="flex min-h-56 flex-col justify-center gap-2">
+                <h2 className="text-2xl font-semibold text-white md:text-3xl">
+                  Your reading soundtrack will appear here
+                </h2>
+                <p className="text-base leading-relaxed text-zinc-400">
+                  We&apos;ll match your book with a mood and generate a playlist
+                  you can play instantly.
+                </p>
               </div>
             )}
             <p className="mt-4 text-xs text-zinc-500">
-              listening - tap Send to begin
+              Drop in a title—BookFlow handles the rest.
             </p>
           </div>
         </section>
@@ -393,29 +501,32 @@ export default function Home() {
         <section className="mt-10 grid gap-8 border-t border-zinc-300 pt-7 text-zinc-700 md:grid-cols-3">
           <article>
             <h2 className="mb-2 text-5xl font-serif italic text-zinc-900">01.</h2>
-            <h3 className="mb-2 text-lg font-semibold text-zinc-900">You ask</h3>
+            <h3 className="mb-2 text-lg font-semibold text-zinc-900">
+              Name the book
+            </h3>
             <p>
-              Your message leaves your machine and travels to the API&apos;s
-              address.
+              Tell us what you&apos;re reading. We look up the real title and
+              details so the vibe fits the page, not a guess.
             </p>
           </article>
           <article>
             <h2 className="mb-2 text-5xl font-serif italic text-zinc-900">02.</h2>
             <h3 className="mb-2 text-lg font-semibold text-zinc-900">
-              The server thinks
+              Shape the mood
             </h3>
             <p>
-              It reads what you asked and runs the work needed to shape an
-              answer.
+              BookFlow reads the tone—then sketches a playlist name, a short
+              vibe story, and tags you can feel in one glance.
             </p>
           </article>
           <article>
             <h2 className="mb-2 text-5xl font-serif italic text-zinc-900">03.</h2>
             <h3 className="mb-2 text-lg font-semibold text-zinc-900">
-              You get a reply
+              Hit play, keep reading
             </h3>
             <p>
-              A reply comes back ready for your app to render and use.
+              You get instrumental-friendly picks you can play right here—less
+              distraction, more flow.
             </p>
           </article>
         </section>
