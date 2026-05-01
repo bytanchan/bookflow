@@ -1,6 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { Instrument_Serif } from "next/font/google";
+
+const instrumentSerif = Instrument_Serif({
+  subsets: ["latin"],
+  weight: ["400"],
+});
 
 type Book = {
   title: string;
@@ -29,7 +35,7 @@ type YouTubeVideo = {
 
 export default function Home() {
   const [prompt, setPrompt] = useState("");
-  const [statusText, setStatusText] = useState("Your answer will land here.");
+  const [statusText, setStatusText] = useState("Your reading soundtrack will appear here.");
   const [bookResult, setBookResult] = useState<Book | null>(null);
   const [vibeResult, setVibeResult] = useState<BookVibe | null>(null);
   const [isGeneratingVibe, setIsGeneratingVibe] = useState(false);
@@ -196,22 +202,22 @@ export default function Home() {
     <div className="min-h-screen bg-[#f4f3ef] px-6 py-10 text-zinc-900 md:px-10">
       <main className="mx-auto w-full max-w-6xl">
         <p className="mb-5 inline-flex rounded-full border border-zinc-900 bg-yellow-300 px-3 py-1 text-xs font-semibold uppercase tracking-wide">
-          Live Lesson
+          BookFlow
         </p>
-        <h1 className="text-5xl font-semibold leading-tight tracking-tight md:text-7xl">
-          How does an <span className="font-serif italic font-normal">API</span>{" "}
-          actually work?
+        <h1 className={`${instrumentSerif.className} text-5xl font-semibold leading-tight tracking-tight md:text-7xl`}>
+          Turn any book into a{" "}
+          <span className="italic font-normal">reading soundtrack</span>
         </h1>
         <p className="mt-4 mb-8 text-lg text-zinc-700">
-          Type something on the left. The API answers on the right. That&apos;s
-          the whole job.
+          Enter a book and we&apos;ll generate a focus-friendly soundtrack
+          tailored to its mood, setting, and energy.
         </p>
 
         <section className="grid gap-4 md:grid-cols-2">
           <div className="rounded-2xl border-2 border-zinc-900 bg-[#f8f8f8] p-4 shadow-[3px_3px_0_0_#111]">
             <div className="mb-4 flex items-center justify-between">
               <p className="text-sm font-semibold uppercase tracking-wide">
-                Your Prompt
+                Search a Book
               </p>
               <div className="flex gap-1.5">
                 <span className="h-2 w-2 rounded-full bg-red-400" />
@@ -223,7 +229,7 @@ export default function Home() {
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               maxLength={500}
-              placeholder="Type a book title..."
+              placeholder="Try: A Little Life"
               className="h-56 w-full resize-none border-0 bg-transparent text-4xl font-serif italic text-zinc-900 outline-none placeholder:text-zinc-500"
             />
             <div className="mt-4 flex items-center justify-between border-t border-dashed border-zinc-300 pt-4">
@@ -234,14 +240,14 @@ export default function Home() {
                 onClick={handleGenerate}
                 className="rounded-full border border-zinc-900 bg-yellow-400 px-5 py-2 text-sm font-semibold shadow-[2px_2px_0_0_#111] transition hover:translate-y-[1px] hover:shadow-[1px_1px_0_0_#111]"
               >
-                Send
+                Generate soundtrack
               </button>
             </div>
           </div>
 
           <div className="rounded-2xl border-2 border-zinc-900 bg-zinc-950 p-4 text-zinc-100 shadow-[3px_3px_0_0_#f1cc32]">
             <p className="mb-4 text-sm font-semibold uppercase tracking-wide text-zinc-200">
-              The Answer
+              Your Soundtrack
             </p>
             {bookResult ? (
               <div className="space-y-3 text-zinc-200">
@@ -261,7 +267,7 @@ export default function Home() {
 
                 <div className="mt-4 rounded-md border border-zinc-700 bg-zinc-900 p-3">
                   <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">
-                    OpenAI reading vibe
+                    Reading vibe
                   </p>
 
                   {isGeneratingVibe ? (
@@ -325,8 +331,8 @@ export default function Home() {
                                 key={`${video.searchQuery}-${index}`}
                                 className="rounded-md border border-zinc-700 bg-zinc-950 p-3"
                               >
-                                <p className="mb-2 text-xs text-zinc-500">
-                                  Query: {video.searchQuery}
+                                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">
+                                  {video.searchQuery.split(":")[0]}
                                 </p>
                                 {!video.videoId ? (
                                   <p className="text-sm text-zinc-400">
@@ -380,12 +386,12 @@ export default function Home() {
                 </div>
               </div>
             ) : (
-              <div className="h-56 whitespace-pre-wrap font-serif text-5xl italic text-zinc-400">
+              <div className={`${instrumentSerif.className} h-56 whitespace-pre-wrap text-5xl italic text-zinc-400`}>
                 {statusText}
               </div>
             )}
             <p className="mt-4 text-xs text-zinc-500">
-              listening - tap Send to begin
+              Search a book to start.
             </p>
           </div>
         </section>
@@ -393,29 +399,27 @@ export default function Home() {
         <section className="mt-10 grid gap-8 border-t border-zinc-300 pt-7 text-zinc-700 md:grid-cols-3">
           <article>
             <h2 className="mb-2 text-5xl font-serif italic text-zinc-900">01.</h2>
-            <h3 className="mb-2 text-lg font-semibold text-zinc-900">You ask</h3>
+            <h3 className="mb-2 text-lg font-semibold text-zinc-900">You pick a book</h3>
             <p>
-              Your message leaves your machine and travels to the API&apos;s
-              address.
+              Choose something you want to read or get into.
             </p>
           </article>
           <article>
             <h2 className="mb-2 text-5xl font-serif italic text-zinc-900">02.</h2>
             <h3 className="mb-2 text-lg font-semibold text-zinc-900">
-              The server thinks
+              We generate the vibe
             </h3>
             <p>
-              It reads what you asked and runs the work needed to shape an
-              answer.
+              We analyze the book&apos;s tone and create a reading atmosphere.
             </p>
           </article>
           <article>
             <h2 className="mb-2 text-5xl font-serif italic text-zinc-900">03.</h2>
             <h3 className="mb-2 text-lg font-semibold text-zinc-900">
-              You get a reply
+              You press play
             </h3>
             <p>
-              A reply comes back ready for your app to render and use.
+              Get a curated soundtrack to help you focus and stay immersed.
             </p>
           </article>
         </section>
